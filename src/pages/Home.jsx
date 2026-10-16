@@ -1,3 +1,4 @@
+import shoesImage from "../images/shoes.png";
 import { useEffect, useRef, useState } from "react"
 import { Link } from "react-router-dom"
 import { getCategories } from "../api/categories"
@@ -89,7 +90,7 @@ export default function Home() {
             <div className="hero-shape hero-shape-3"></div>
             <div className="hero-product-img">
               <img
-                src="/src/images/shoes.png"
+                src={shoesImage}
                 alt="Featured Product"
               />
             </div>
