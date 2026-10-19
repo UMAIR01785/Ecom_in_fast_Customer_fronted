@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext"
 import { useOrderSocket } from "../context/OrderSocketContext"
 import { getOrder, cancelOrder } from "../api/orders"
 import { getReceipt } from "../api/payments"
+import { requestRefund, getMyRefunds } from "../api/refunds"
 import { getErrorMessage } from "../api/client"
 
 const STATUS_COLORS = {
@@ -31,6 +32,24 @@ const PAYMENT_STATUS_COLORS = {
   refunded: { bg: "#e0e7ff", text: "#3730a3" },
 }
 
+const REFUND_STATUS_COLORS = {
+  requested: { bg: "#fef3c7", text: "#92400e" },
+  approved: { bg: "#dbeafe", text: "#1e40af" },
+  rejected: { bg: "#fee2e2", text: "#991b1b" },
+  processing: { bg: "#e0e7ff", text: "#3730a3" },
+  completed: { bg: "#dcfce7", text: "#166534" },
+  failed: { bg: "#fee2e2", text: "#991b1b" },
+}
+
+const REFUND_STATUS_LABELS = {
+  requested: "Requested",
+  approved: "Approved",
+  rejected: "Rejected",
+  processing: "Processing",
+  completed: "Refunded",
+  failed: "Failed",
+}
+
 export default function OrderDetail() {
   const { id } = useParams()
   const { isAuthenticated } = useAuth()
@@ -43,6 +62,11 @@ export default function OrderDetail() {
   const [receipt, setReceipt] = useState(null)
   const [receiptLoading, setReceiptLoading] = useState(false)
   const [receiptError, setReceiptError] = useState("")
+  const [refund, setRefund] = useState(null)
+  const [refundOpen, setRefundOpen] = useState(false)
+  const [refundReason, setRefundReason] = useState("")
+  const [refundSubmitting, setRefundSubmitting] = useState(false)
+  const [refundError, setRefundError] = useState("")
 
   async function handleViewReceipt() {
     if (!order?.payment?.id) return
@@ -97,6 +121,22 @@ export default function OrderDetail() {
     return () => { cancelled = true }
   }, [id, navigate])
 
+  useEffect(() => {
+    let cancelled = false
+    async function fetchRefund() {
+      try {
+        const data = await getMyRefunds()
+        if (cancelled) return
+        const match = data.find((r) => String(r.order_id) === String(id))
+        setRefund(match || null)
+      } catch {
+        if (!cancelled) setRefund(null)
+      }
+    }
+    fetchRefund()
+    return () => { cancelled = true }
+  }, [id])
+
   if (!isAuthenticated) {
     return <Navigate to="/login?returnTo=/orders" replace />
   }
@@ -139,6 +179,27 @@ export default function OrderDetail() {
       setError(getErrorMessage(err))
     } finally {
       setCancelling(false)
+    }
+  }
+
+  async function handleRefundSubmit(e) {
+    e.preventDefault()
+    const reason = refundReason.trim()
+    if (reason.length < 5) {
+      setRefundError("Please give a reason of at least 5 characters")
+      return
+    }
+    setRefundSubmitting(true)
+    setRefundError("")
+    try {
+      const created = await requestRefund(order.id, reason)
+      setRefund(created)
+      setRefundOpen(false)
+      setRefundReason("")
+    } catch (err) {
+      setRefundError(getErrorMessage(err))
+    } finally {
+      setRefundSubmitting(false)
     }
   }
 
@@ -212,6 +273,24 @@ export default function OrderDetail() {
             {cancelling ? "Cancelling..." : "Cancel Order"}
           </button>
         )}
+        {order.status === "delivered" && order.payment && !refund && (
+          <button
+            onClick={() => setRefundOpen(true)}
+            style={{
+              marginLeft: "auto",
+              padding: "6px 16px",
+              borderRadius: 999,
+              fontSize: "0.85rem",
+              fontWeight: 600,
+              background: "#eef2ff",
+              color: "#3730a3",
+              border: "1px solid #c7d2fe",
+              cursor: "pointer",
+            }}
+          >
+            Request Refund
+          </button>
+        )}
       </div>
 
       <div className="sc-layout">
@@ -266,6 +345,87 @@ export default function OrderDetail() {
               </div>
             </div>
           </div>
+
+          {refund && (
+            <div className="profile-card">
+              <h2 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: 16, paddingBottom: 12, borderBottom: "1px solid var(--border-light)" }}>
+                Refund
+              </h2>
+              <div className="profile-fields">
+                <div className="profile-field">
+                  <span className="profile-field-label">Status</span>
+                  <span className="profile-field-value">
+                    <span style={{
+                      display: "inline-block",
+                      padding: "4px 12px",
+                      borderRadius: 999,
+                      fontSize: "0.8rem",
+                      fontWeight: 600,
+                      background: (REFUND_STATUS_COLORS[refund.status] || REFUND_STATUS_COLORS.requested).bg,
+                      color: (REFUND_STATUS_COLORS[refund.status] || REFUND_STATUS_COLORS.requested).text,
+                      textTransform: "capitalize",
+                    }}>
+                      {REFUND_STATUS_LABELS[refund.status] || refund.status}
+                    </span>
+                  </span>
+                </div>
+                <div className="profile-field">
+                  <span className="profile-field-label">Amount</span>
+                  <span className="profile-field-value">Rs {Number(refund.amount).toFixed(2)}</span>
+                </div>
+                <div className="profile-field" style={{ gridColumn: "1 / -1" }}>
+                  <span className="profile-field-label">Reason</span>
+                  <span className="profile-field-value">{refund.reason}</span>
+                </div>
+                <div className="profile-field">
+                  <span className="profile-field-label">Requested On</span>
+                  <span className="profile-field-value">
+                    {new Date(refund.requested_at).toLocaleDateString("en-US", {
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </div>
+                {refund.reviewed_at && (
+                  <div className="profile-field">
+                    <span className="profile-field-label">Reviewed On</span>
+                    <span className="profile-field-value">
+                      {new Date(refund.reviewed_at).toLocaleDateString("en-US", {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </div>
+                )}
+                {refund.completed_at && (
+                  <div className="profile-field">
+                    <span className="profile-field-label">Refunded On</span>
+                    <span className="profile-field-value">
+                      {new Date(refund.completed_at).toLocaleDateString("en-US", {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </div>
+                )}
+                {refund.admin_note && (
+                  <div className="profile-field" style={{ gridColumn: "1 / -1" }}>
+                    <span className="profile-field-label">Admin Note</span>
+                    <span className="profile-field-value">{refund.admin_note}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="profile-card">
             <h2 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: 16, paddingBottom: 12, borderBottom: "1px solid var(--border-light)" }}>
@@ -538,6 +698,109 @@ export default function OrderDetail() {
               </div>
             ) : null}
           </div>
+        </div>
+      )}
+
+      {refundOpen && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: 20,
+          }}
+          onClick={() => !refundSubmitting && setRefundOpen(false)}
+        >
+          <form
+            className="profile-card"
+            style={{ width: "100%", maxWidth: 480 }}
+            onSubmit={handleRefundSubmit}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, paddingBottom: 12, borderBottom: "1px solid var(--border-light)" }}>
+              <h2 style={{ fontSize: "1.1rem", fontWeight: 700, margin: 0 }}>
+                Request Refund
+              </h2>
+              <button
+                type="button"
+                className="admin-action-btn"
+                title="Close"
+                onClick={() => setRefundOpen(false)}
+                disabled={refundSubmitting}
+              >
+                &#10005;
+              </button>
+            </div>
+
+            <p style={{ fontSize: "0.9rem", color: "var(--text-muted)", lineHeight: 1.6, marginTop: 0 }}>
+              Refund for Order #{order.id} &middot; Rs {Number(order.total_amount).toFixed(2)}
+            </p>
+
+            <label
+              htmlFor="refund-reason"
+              style={{ display: "block", fontWeight: 600, fontSize: "0.9rem", marginBottom: 8 }}
+            >
+              Reason
+            </label>
+            <textarea
+              id="refund-reason"
+              value={refundReason}
+              onChange={(e) => setRefundReason(e.target.value)}
+              rows={4}
+              maxLength={500}
+              placeholder="Tell us why you want a refund (min. 5 characters)"
+              disabled={refundSubmitting}
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                borderRadius: "var(--radius-sm)",
+                border: "1px solid var(--border-light)",
+                background: "var(--bg)",
+                color: "var(--text)",
+                fontSize: "0.9rem",
+                fontFamily: "inherit",
+                resize: "vertical",
+                boxSizing: "border-box",
+              }}
+            />
+
+            {refundError && (
+              <div className="alert alert-error" style={{ marginTop: 12 }}>
+                {refundError}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 16 }}>
+              <button
+                type="button"
+                className="sc-empty-btn"
+                onClick={() => setRefundOpen(false)}
+                disabled={refundSubmitting}
+                style={{ marginTop: 0 }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="sc-empty-btn"
+                disabled={refundSubmitting}
+                style={{
+                  marginTop: 0,
+                  background: "#4f46e5",
+                  color: "#fff",
+                  border: "1px solid #4f46e5",
+                  cursor: refundSubmitting ? "not-allowed" : "pointer",
+                  opacity: refundSubmitting ? 0.6 : 1,
+                }}
+              >
+                {refundSubmitting ? "Submitting..." : "Submit Request"}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </main>

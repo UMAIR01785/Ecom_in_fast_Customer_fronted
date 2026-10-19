@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate } from "react-router-dom"
 import { useAuth } from "../context/AuthContext"
 import { useOrderSocket } from "../context/OrderSocketContext"
 import { getOrders } from "../api/orders"
+import { getMyRefunds } from "../api/refunds"
 import { getErrorMessage } from "../api/client"
 import { addressLine } from "../utils/orderAddress"
 
@@ -22,13 +23,36 @@ const PAYMENT_STATUS_COLORS = {
   refunded: { bg: "#e0e7ff", text: "#3730a3" },
 }
 
+const REFUND_STATUS_COLORS = {
+  requested: { bg: "#fef3c7", text: "#92400e" },
+  approved: { bg: "#dbeafe", text: "#1e40af" },
+  rejected: { bg: "#fee2e2", text: "#991b1b" },
+  processing: { bg: "#e0e7ff", text: "#3730a3" },
+  completed: { bg: "#dcfce7", text: "#166534" },
+  failed: { bg: "#fee2e2", text: "#991b1b" },
+}
+
+const REFUND_STATUS_LABELS = {
+  requested: "Refund Requested",
+  approved: "Refund Approved",
+  rejected: "Refund Rejected",
+  processing: "Refund Processing",
+  completed: "Refunded",
+  failed: "Refund Failed",
+}
+
 export default function Orders() {
   const { isAuthenticated } = useAuth()
   const { subscribe } = useOrderSocket()
   const [orders, setOrders] = useState([])
+  const [refunds, setRefunds] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const navigate = useNavigate()
+
+  const refundByOrder = new Map(
+    refunds.map((r) => [String(r.order_id), r])
+  )
 
   useEffect(() => {
     return subscribe((message) => {
@@ -51,8 +75,13 @@ export default function Orders() {
     let cancelled = false
     async function fetchOrders() {
       try {
-        const data = await getOrders()
-        if (!cancelled) setOrders(data.filter((o) => o.status !== "cancelled"))
+        const [ordersData, refundsData] = await Promise.all([
+          getOrders(),
+          getMyRefunds().catch(() => []),
+        ])
+        if (cancelled) return
+        setOrders(ordersData.filter((o) => o.status !== "cancelled"))
+        setRefunds(refundsData)
       } catch (err) {
         if (!cancelled) setError(getErrorMessage(err))
       } finally {
@@ -117,6 +146,10 @@ export default function Orders() {
             const style = STATUS_COLORS[order.status] || STATUS_COLORS.pending
             const paymentStatus = order.payment?.status
             const paymentStyle = PAYMENT_STATUS_COLORS[paymentStatus]
+            const refund = refundByOrder.get(String(order.id))
+            const refundStyle = refund
+              ? REFUND_STATUS_COLORS[refund.status] || REFUND_STATUS_COLORS.requested
+              : null
             return (
               <div
                 key={order.id}
@@ -176,6 +209,19 @@ export default function Orders() {
                         textTransform: "capitalize",
                       }}>
                         Payment: {paymentStatus}
+                      </span>
+                    )}
+                    {refund && (
+                      <span style={{
+                        display: "inline-block",
+                        padding: "4px 12px",
+                        borderRadius: 999,
+                        fontSize: "0.8rem",
+                        fontWeight: 600,
+                        background: refundStyle.bg,
+                        color: refundStyle.text,
+                      }}>
+                        {REFUND_STATUS_LABELS[refund.status] || `Refund: ${refund.status}`}
                       </span>
                     )}
                     <span style={{ fontWeight: 700, fontSize: "1.05rem", color: "var(--text)" }}>

@@ -18,6 +18,7 @@ import PaymentSuccess from "./pages/PaymentSuccess"
 import PaymentCancel from "./pages/PaymentCancel"
 import Orders from "./pages/Orders"
 import OrderDetail from "./pages/OrderDetail"
+import Refunds from "./pages/Refunds"
 
 const ADMIN_URL = import.meta.env.VITE_ADMIN_URL || "http://localhost:5174"
 
@@ -73,6 +74,14 @@ function WebLayout() {
           element={
             <ProtectedRoute>
               <OrderDetail />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/refunds"
+          element={
+            <ProtectedRoute>
+              <Refunds />
             </ProtectedRoute>
           }
         />

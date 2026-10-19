@@ -48,6 +48,9 @@ export default function Navbar() {
               <Link to="/orders" className="navbar-link" onClick={closeMenu}>
                 Orders
               </Link>
+              <Link to="/refunds" className="navbar-link" onClick={closeMenu}>
+                Refunds
+              </Link>
               <Link to="/profile" className="navbar-link" onClick={closeMenu}>
                 Profile
               </Link>
