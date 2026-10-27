@@ -387,7 +387,11 @@ export default function Checkout() {
                   {item.product.name}
                 </div>
                 <div style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>
-                  Qty: {item.quantity} x Rs {Number(item.product.price).toFixed(2)}
+                  {item.variant
+                    ? `${item.variant.size} / ${item.variant.color} · `
+                    : ""}
+                  Qty: {item.quantity} x Rs{" "}
+                  {Number(item.variant?.price ?? item.product.price).toFixed(2)}
                 </div>
               </div>
               <span style={{ fontWeight: 700, color: "var(--text)", flexShrink: 0 }}>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { useParams, Link, useNavigate } from "react-router-dom"
 import { getProduct } from "../api/products"
 import { getCategory } from "../api/categories"
+import { getProductVariants } from "../api/productVariants"
 import { getErrorMessage } from "../api/client"
 import { useCart } from "../context/CartContext"
 
@@ -14,6 +15,9 @@ export default function ProductDetail() {
   const [error, setError] = useState("")
   const [activeTab, setActiveTab] = useState("description")
   const [adding, setAdding] = useState(false)
+  const [variantsData, setVariantsData] = useState(null)
+  const [pickedColor, setPickedColor] = useState("")
+  const [pickedSize, setPickedSize] = useState("")
   const { addToCart } = useCart()
 
   useEffect(() => {
@@ -40,11 +44,63 @@ export default function ProductDetail() {
     return () => { cancelled = true }
   }, [categorySlug, productSlug])
 
+  useEffect(() => {
+    if (!product?.id) return
+    let cancelled = false
+
+    getProductVariants(product.id)
+      .then((data) => {
+        if (!cancelled) {
+          setVariantsData({
+            productId: product.id,
+            list: (data || []).filter((v) => v.is_active),
+          })
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setVariantsData({ productId: product.id, list: [] })
+      })
+
+    return () => { cancelled = true }
+  }, [product?.id])
+
+  const variantsLoading = Boolean(product) && variantsData?.productId !== product.id
+  const variants = variantsData?.productId === product.id ? variantsData.list : []
+
+  const colors = [...new Set(variants.map((v) => v.color))]
+  const selectedColor = colors.includes(pickedColor)
+    ? pickedColor
+    : colors[0] || ""
+  const colorVariants = variants.filter((v) => v.color === selectedColor)
+  const sizes = [...new Set(colorVariants.map((v) => v.size))]
+  const selectedSize = sizes.includes(pickedSize)
+    ? pickedSize
+    : (colorVariants.find((v) => v.stock > 0) || colorVariants[0])?.size || ""
+
+  const hasVariants = variants.length > 0
+  const selectedVariant =
+    colorVariants.find((v) => v.size === selectedSize) || null
+
+  const displayPrice =
+    selectedVariant?.price != null
+      ? Number(selectedVariant.price)
+      : Number(product?.price ?? 0)
+
+  const displayStock = hasVariants
+    ? selectedVariant
+      ? selectedVariant.stock
+      : null
+    : product?.stock
+
   async function handleAddToCart() {
     if (!product || adding) return
+    if (hasVariants && !selectedVariant) {
+      setError("Please select a size and color")
+      return
+    }
     setAdding(true)
     try {
-      await addToCart(product.id, 1)
+      await addToCart(product.id, 1, selectedVariant ? selectedVariant.id : null)
       navigate("/cart")
     } catch (err) {
       setError(getErrorMessage(err))
@@ -116,9 +172,19 @@ export default function ProductDetail() {
           <h1 className="pd-name">{product.name}</h1>
 
           <div className="pd-price-row">
-            <span className="pd-price">Rs {Number(product.price).toFixed(2)}</span>
-            <span className={`pd-stock ${product.stock > 0 ? "in-stock" : "out-of-stock"}`}>
-              {product.stock > 0 ? `${product.stock} in stock` : "Out of stock"}
+            <span className="pd-price">Rs {displayPrice.toFixed(2)}</span>
+            <span
+              className={
+                displayStock == null
+                  ? "pd-stock"
+                  : `pd-stock ${displayStock > 0 ? "in-stock" : "out-of-stock"}`
+              }
+            >
+              {displayStock == null
+                ? "Select size & color"
+                : displayStock > 0
+                  ? `${displayStock} in stock`
+                  : "Out of stock"}
             </span>
           </div>
 
@@ -126,17 +192,90 @@ export default function ProductDetail() {
             <p className="pd-description">{product.description}</p>
           )}
 
+          {variantsLoading && (
+            <p className="pd-variant-loading">Loading sizes &amp; colors...</p>
+          )}
+
+          {!variantsLoading && hasVariants && (
+            <div className="pd-variants">
+              <div className="pd-variant-group">
+                <div className="pd-variant-head">
+                  <span className="pd-variant-label">Color</span>
+                  <span className="pd-variant-value">{selectedColor}</span>
+                </div>
+                <div className="pd-variant-options">
+                  {colors.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      className={`pd-variant-chip ${
+                        selectedColor === color ? "active" : ""
+                      }`}
+                      onClick={() => setPickedColor(color)}
+                    >
+                      {color}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pd-variant-group">
+                <div className="pd-variant-head">
+                  <span className="pd-variant-label">Size</span>
+                  <span className="pd-variant-value">{selectedSize}</span>
+                </div>
+                <div className="pd-variant-options">
+                  {sizes.map((size) => {
+                    const sizeVariant = colorVariants.find(
+                      (v) => v.size === size
+                    )
+                    const out = !sizeVariant || sizeVariant.stock <= 0
+                    return (
+                      <button
+                        key={size}
+                        type="button"
+                        className={`pd-variant-chip ${
+                          selectedSize === size ? "active" : ""
+                        } ${out ? "disabled" : ""}`}
+                        disabled={out}
+                        onClick={() => setPickedSize(size)}
+                      >
+                        {size}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {selectedVariant && (
+                <div className="pd-variant-sku">
+                  SKU: <strong>{selectedVariant.sku}</strong>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="pd-actions">
             <button
               className="btn btn-primary btn-lg pd-btn-cart"
-              disabled={product.stock === 0 || adding}
+              disabled={
+                adding ||
+                (hasVariants && (!selectedVariant || selectedVariant.stock <= 0)) ||
+                (!hasVariants && product.stock === 0)
+              }
               onClick={handleAddToCart}
             >
               {adding
                 ? "ADDING..."
-                : product.stock > 0
-                  ? "ADD TO BAG"
-                  : "OUT OF STOCK"}
+                : hasVariants
+                  ? !selectedVariant
+                    ? "SELECT SIZE & COLOR"
+                    : selectedVariant.stock <= 0
+                      ? "OUT OF STOCK"
+                      : "ADD TO BAG"
+                  : product.stock > 0
+                    ? "ADD TO BAG"
+                    : "OUT OF STOCK"}
             </button>
             <button className="btn btn-outline btn-lg pd-btn-wishlist">
               &#9825;
@@ -150,7 +289,9 @@ export default function ProductDetail() {
             </div>
             <div className="pd-meta-item">
               <span className="pd-meta-label">SKU</span>
-              <span className="pd-meta-value">{product.slug.toUpperCase()}</span>
+              <span className="pd-meta-value">
+                {(selectedVariant?.sku || product.slug).toUpperCase()}
+              </span>
             </div>
           </div>
         </div>
@@ -188,7 +329,9 @@ export default function ProductDetail() {
               <tbody>
                 <tr>
                   <td className="pd-info-label">SKU</td>
-                  <td className="pd-info-value">{product.slug.toUpperCase()}</td>
+                  <td className="pd-info-value">
+                    {(selectedVariant?.sku || product.slug).toUpperCase()}
+                  </td>
                 </tr>
                 <tr>
                   <td className="pd-info-label">Category</td>
@@ -196,7 +339,13 @@ export default function ProductDetail() {
                 </tr>
                 <tr>
                   <td className="pd-info-label">Stock</td>
-                  <td className="pd-info-value">{product.stock} units</td>
+                  <td className="pd-info-value">
+                    {hasVariants
+                      ? selectedVariant
+                        ? `${selectedVariant.stock} units (${selectedVariant.size} / ${selectedVariant.color})`
+                        : "Select size & color"
+                      : `${product.stock} units`}
+                  </td>
                 </tr>
                 <tr>
                   <td className="pd-info-label">Status</td>

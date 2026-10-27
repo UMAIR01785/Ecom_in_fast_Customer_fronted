@@ -12,19 +12,19 @@ export default function Cart() {
   const [removing, setRemoving] = useState(null)
   const [updating, setUpdating] = useState(null)
 
-  async function changeQty(pid, qty) {
+  async function changeQty(itemId, qty) {
     if (qty < 1) return
-    setUpdating(pid)
+    setUpdating(itemId)
     setError("")
-    try { await updateCartItem(pid, qty) }
+    try { await updateCartItem(itemId, qty) }
     catch (e) { setError(getErrorMessage(e)) }
     finally { setUpdating(null) }
   }
 
-  async function removeItem(pid) {
-    setRemoving(pid)
+  async function removeItem(itemId) {
+    setRemoving(itemId)
     setError("")
-    try { await removeFromCart(pid) }
+    try { await removeFromCart(itemId) }
     catch (e) { setError(getErrorMessage(e)) }
     finally { setRemoving(null) }
   }
@@ -98,7 +98,7 @@ export default function Cart() {
           {cart.items.map((item) => (
             <div
               key={item.id}
-              className={`sc-item ${removing === item.product_id ? "sc-item-out" : ""}`}
+              className={`sc-item ${removing === item.id ? "sc-item-out" : ""}`}
             >
               <Link
                 to={item.product.category_slug ? `/${item.product.category_slug}/${item.product.slug}` : "/shop"}
@@ -118,20 +118,30 @@ export default function Cart() {
                 >
                   {item.product.name}
                 </Link>
-                <span className="sc-item-price-unit">Rs {Number(item.product.price).toFixed(2)} each</span>
+                <span className="sc-item-price-unit">
+                  Rs {Number(item.variant?.price ?? item.product.price).toFixed(2)} each
+                </span>
+
+                {item.variant && (
+                  <div className="sc-item-variant">
+                    <span className="sc-item-variant-chip">Size: {item.variant.size}</span>
+                    <span className="sc-item-variant-chip">Color: {item.variant.color}</span>
+                    <span className="sc-item-variant-sku">{item.variant.sku}</span>
+                  </div>
+                )}
 
                 <div className="sc-item-bottom">
                   <div className="sc-qty">
                     <button
                       className="sc-qty-btn"
-                      onClick={() => changeQty(item.product_id, item.quantity - 1)}
-                      disabled={updating === item.product_id || item.quantity <= 1}
+                      onClick={() => changeQty(item.id, item.quantity - 1)}
+                      disabled={updating === item.id || item.quantity <= 1}
                     >&#8722;</button>
                     <span className="sc-qty-val">{item.quantity}</span>
                     <button
                       className="sc-qty-btn"
-                      onClick={() => changeQty(item.product_id, item.quantity + 1)}
-                      disabled={updating === item.product_id}
+                      onClick={() => changeQty(item.id, item.quantity + 1)}
+                      disabled={updating === item.id}
                     >+</button>
                   </div>
 
@@ -141,8 +151,8 @@ export default function Cart() {
 
               <button
                 className="sc-item-remove"
-                onClick={() => removeItem(item.product_id)}
-                disabled={removing === item.product_id}
+                onClick={() => removeItem(item.id)}
+                disabled={removing === item.id}
                 title="Remove"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>

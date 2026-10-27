@@ -70,10 +70,10 @@ export function CartProvider({ children }) {
     }
   }, [isAuthenticated, token])
 
-  const addToCart = useCallback(async (product_id, quantity = 1) => {
+  const addToCart = useCallback(async (product_id, quantity = 1, variant_id = null) => {
     try {
       setError("")
-      const data = await apiAddToCart(product_id, quantity)
+      const data = await apiAddToCart(product_id, quantity, variant_id)
       setCart(data)
       return data
     } catch (err) {
@@ -83,10 +83,10 @@ export function CartProvider({ children }) {
     }
   }, [])
 
-  const updateCartItem = useCallback(async (product_id, quantity) => {
+  const updateCartItem = useCallback(async (cart_item_id, quantity) => {
     try {
       setError("")
-      const data = await apiUpdateCartItem(product_id, quantity)
+      const data = await apiUpdateCartItem(cart_item_id, quantity)
       setCart(data)
       return data
     } catch (err) {
@@ -96,10 +96,10 @@ export function CartProvider({ children }) {
     }
   }, [])
 
-  const removeFromCart = useCallback(async (product_id) => {
+  const removeFromCart = useCallback(async (cart_item_id) => {
     try {
       setError("")
-      const data = await apiRemoveFromCart(product_id)
+      const data = await apiRemoveFromCart(cart_item_id)
       setCart(data)
       return data
     } catch (err) {

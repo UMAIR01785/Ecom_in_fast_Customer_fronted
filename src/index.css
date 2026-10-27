@@ -1785,6 +1785,104 @@ body {
   color: var(--text);
 }
 
+/* Variant selector (size & color) */
+.pd-variant-loading {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+}
+
+.pd-variants {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 18px;
+  margin-bottom: 26px;
+  background: var(--white);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.pd-variant-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pd-variant-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pd-variant-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.pd-variant-value {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.pd-variant-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pd-variant-chip {
+  min-width: 48px;
+  padding: 9px 14px;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--white);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.pd-variant-chip:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.pd-variant-chip.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--white);
+}
+
+.pd-variant-chip:disabled,
+.pd-variant-chip.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+
+.pd-variant-chip.active.disabled {
+  text-decoration: none;
+}
+
+.pd-variant-sku {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.pd-variant-sku strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
 /* Tabs */
 .pd-tabs {
   display: flex;
@@ -3027,6 +3125,29 @@ body {
   color: var(--text-muted);
   display: block;
   margin-bottom: 16px;
+}
+
+.sc-item-variant {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: -8px 0 16px;
+}
+
+.sc-item-variant-chip {
+  padding: 3px 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--primary-light);
+  border-radius: 999px;
+}
+
+.sc-item-variant-sku {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  letter-spacing: 0.4px;
 }
 
 .sc-item-bottom {
