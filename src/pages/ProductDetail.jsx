@@ -65,7 +65,8 @@ export default function ProductDetail() {
   }, [product?.id])
 
   const variantsLoading = Boolean(product) && variantsData?.productId !== product.id
-  const variants = variantsData?.productId === product.id ? variantsData.list : []
+  const variants =
+    product && variantsData?.productId === product.id ? variantsData.list : []
 
   const colors = [...new Set(variants.map((v) => v.color))]
   const selectedColor = colors.includes(pickedColor)
