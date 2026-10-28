@@ -5,6 +5,7 @@ import { CartProvider } from "./context/CartContext"
 import { OrderSocketProvider } from "./context/OrderSocketContext"
 import Navbar from "./components/Navbar"
 import Footer from "./components/Footer"
+import ShoppingChatWidget from "./components/ShoppingChatWidget"
 import Home from "./pages/Home"
 import Register from "./pages/Register"
 import Login from "./pages/Login"
@@ -93,6 +94,7 @@ function WebLayout() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <Footer />
+      <ShoppingChatWidget />
     </>
   )
 }
