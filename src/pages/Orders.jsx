@@ -272,6 +272,21 @@ export default function Orders() {
                         <div style={{ fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {item.product_name || `Product #${item.product_id}`}
                         </div>
+                        {(item.variant_size || item.variant_color || item.variant_sku) && (
+                          <div style={{
+                            fontSize: "0.75rem",
+                            color: "var(--text-muted)",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}>
+                            {[
+                              item.variant_size && `Size: ${item.variant_size}`,
+                              item.variant_color && `Color: ${item.variant_color}`,
+                              item.variant_sku,
+                            ].filter(Boolean).join(" · ")}
+                          </div>
+                        )}
                         <div style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>
                           Qty: {item.quantity} &times; Rs {Number(item.unit_price).toFixed(2)}
                         </div>
