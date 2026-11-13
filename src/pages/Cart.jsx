@@ -1,16 +1,20 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { useCart } from "../context/CartContext"
 import { useAuth } from "../context/AuthContext"
 import { getErrorMessage } from "../api/client"
 
 export default function Cart() {
-  const { cart, loading, updateCartItem, removeFromCart } = useCart()
+  const { cart, loading, fetchCart, updateCartItem, removeFromCart } = useCart()
   const { isAuthenticated } = useAuth()
   const [error, setError] = useState("")
   const [promo, setPromo] = useState("")
   const [removing, setRemoving] = useState(null)
   const [updating, setUpdating] = useState(null)
+
+  useEffect(() => {
+    fetchCart().catch(() => {})
+  }, [fetchCart])
 
   async function changeQty(itemId, qty) {
     if (qty < 1) return
