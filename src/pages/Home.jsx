@@ -15,12 +15,6 @@ export default function Home() {
   const productsRef = useRef(null)
 
   useEffect(() => {
-    if(scoket.event==="product_added"){
-      setProducts((prev)=> [...prev])
-    }
-  },[socket])
-
-  useEffect(() => {
     let cancelled = false
     getCategories()
       .then((cats) => {
