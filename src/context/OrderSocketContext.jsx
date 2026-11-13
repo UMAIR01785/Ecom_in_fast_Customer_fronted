@@ -5,7 +5,7 @@ const OrderSocketContext = createContext(null)
 
 function getOrdersWsUrl(token) {
   const base = import.meta.env.VITE_API_URL || (
-    import.meta.env.DEV ? "http://localhost:8000" : window.location.origin
+    import.meta.env.DEV ? "http://localhost:8000" : "https://api.dev-umair.me"
   )
   const wsBase = base.replace(/^http/, "ws")
   return `${wsBase}/ws/orders?token=${encodeURIComponent(token)}`
