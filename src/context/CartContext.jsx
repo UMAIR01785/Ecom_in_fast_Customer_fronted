@@ -18,31 +18,40 @@ export function CartProvider({ children }) {
   const { isAuthenticated, token } = useAuth()
   const prevAuthRef = useRef(isAuthenticated)
   const initializedRef = useRef(false)
+  const cartRequestRef = useRef(0)
 
   // Fetch cart from backend — only clear state on real errors, not 404
   const fetchCart = useCallback(async () => {
+    const requestId = ++cartRequestRef.current
+
     try {
       setLoading(true)
       setError("")
       const data = await getCart()
-      setCart(data)
+      if (requestId === cartRequestRef.current) {
+        setCart(data)
+      }
     } catch (err) {
       // 404 means no cart exists yet (guest with no cookie, or empty cart)
       // Do NOT clear cart state — it may have been set locally by addToCart
-      if (err?.response?.status !== 404) {
+      if (requestId === cartRequestRef.current && err?.response?.status !== 404) {
         setError(err?.response?.data?.detail || "Failed to load cart")
       }
       // Only set cart to null if it was never set (first load)
       // Otherwise keep the local state intact
-      setCart((prev) => {
-        if (prev === null && !initializedRef.current) {
-          return null
-        }
-        return prev
-      })
+      if (requestId === cartRequestRef.current) {
+        setCart((prev) => {
+          if (prev === null && !initializedRef.current) {
+            return null
+          }
+          return prev
+        })
+      }
     } finally {
-      setLoading(false)
-      initializedRef.current = true
+      if (requestId === cartRequestRef.current) {
+        setLoading(false)
+        initializedRef.current = true
+      }
     }
   }, [])
 
@@ -64,59 +73,89 @@ export function CartProvider({ children }) {
   // Merge guest cart when user logs in
   useEffect(() => {
     if (isAuthenticated && token) {
+      const requestId = ++cartRequestRef.current
+
       apiMergeCart()
-        .then((data) => setCart(data))
+        .then((data) => {
+          if (requestId === cartRequestRef.current) {
+            setCart(data)
+          }
+        })
         .catch(() => {})
     }
   }, [isAuthenticated, token])
 
   const addToCart = useCallback(async (product_id, quantity = 1, variant_id = null) => {
+    const requestId = ++cartRequestRef.current
+
     try {
       setError("")
       const data = await apiAddToCart(product_id, quantity, variant_id)
-      setCart(data)
+      if (requestId === cartRequestRef.current) {
+        setCart(data)
+      }
       return data
     } catch (err) {
       const msg = err?.response?.data?.detail || "Failed to add to cart"
-      setError(msg)
+      if (requestId === cartRequestRef.current) {
+        setError(msg)
+      }
       throw new Error(msg)
     }
   }, [])
 
   const updateCartItem = useCallback(async (cart_item_id, quantity) => {
+    const requestId = ++cartRequestRef.current
+
     try {
       setError("")
       const data = await apiUpdateCartItem(cart_item_id, quantity)
-      setCart(data)
+      if (requestId === cartRequestRef.current) {
+        setCart(data)
+      }
       return data
     } catch (err) {
       const msg = err?.response?.data?.detail || "Failed to update cart"
-      setError(msg)
+      if (requestId === cartRequestRef.current) {
+        setError(msg)
+      }
       throw new Error(msg)
     }
   }, [])
 
   const removeFromCart = useCallback(async (cart_item_id) => {
+    const requestId = ++cartRequestRef.current
+
     try {
       setError("")
       const data = await apiRemoveFromCart(cart_item_id)
-      setCart(data)
+      if (requestId === cartRequestRef.current) {
+        setCart(data)
+      }
       return data
     } catch (err) {
       const msg = err?.response?.data?.detail || "Failed to remove from cart"
-      setError(msg)
+      if (requestId === cartRequestRef.current) {
+        setError(msg)
+      }
       throw new Error(msg)
     }
   }, [])
 
   const clearCart = useCallback(async () => {
+    const requestId = ++cartRequestRef.current
+
     try {
       setError("")
       await apiClearCart()
-      setCart(null)
+      if (requestId === cartRequestRef.current) {
+        setCart(null)
+      }
     } catch (err) {
       const msg = err?.response?.data?.detail || "Failed to clear cart"
-      setError(msg)
+      if (requestId === cartRequestRef.current) {
+        setError(msg)
+      }
       throw new Error(msg)
     }
   }, [])
