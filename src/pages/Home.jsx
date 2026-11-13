@@ -14,7 +14,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
   const productsRef = useRef(null)
 
-  useEffetca(() => {
+  useEffect(() => {
     if(scoket.event==="product_added"){
       setProducts((prev)=> [...prev])
     }

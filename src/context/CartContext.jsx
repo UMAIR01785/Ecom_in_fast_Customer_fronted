@@ -19,6 +19,7 @@ export function CartProvider({ children }) {
   const prevAuthRef = useRef(isAuthenticated)
   const initializedRef = useRef(false)
   const cartRequestRef = useRef(0)
+  const mergedTokenRef = useRef(null)
 
   // Fetch cart from backend — only clear state on real errors, not 404
   const fetchCart = useCallback(async () => {
@@ -73,6 +74,9 @@ export function CartProvider({ children }) {
   // Merge guest cart when user logs in
   useEffect(() => {
     if (isAuthenticated && token) {
+      if (mergedTokenRef.current === token) return
+      mergedTokenRef.current = token
+
       const requestId = ++cartRequestRef.current
 
       apiMergeCart()
@@ -82,6 +86,8 @@ export function CartProvider({ children }) {
           }
         })
         .catch(() => {})
+    } else {
+      mergedTokenRef.current = null
     }
   }, [isAuthenticated, token])
 

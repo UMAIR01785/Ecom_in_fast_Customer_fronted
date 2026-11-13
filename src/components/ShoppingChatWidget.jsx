@@ -207,11 +207,13 @@ function ProductCard({ product, onCheckout }) {
         <button
           type="button"
           className="chat-add-btn"
-          disabled={adding || outOfStock || needsVariant}
+          disabled={adding || added || outOfStock || needsVariant}
           onClick={handleAddToCart}
         >
           {adding
             ? "Adding..."
+            : added
+              ? "Added"
             : outOfStock
               ? "Out of stock"
               : needsVariant
