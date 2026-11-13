@@ -8,4 +8,5 @@ export async function getCategories() {
 export async function getCategory(slug) {
   const res = await api.get(`/categories/${slug}`)
   return res.data
+  
 }
