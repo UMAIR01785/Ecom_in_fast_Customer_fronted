@@ -1,72 +1,35 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useParams, Link, useNavigate } from "react-router-dom"
-import { getProduct } from "../api/products"
-import { getCategory } from "../api/categories"
-import { getProductVariants } from "../api/productVariants"
+import {
+  useProduct,
+  useCategory,
+  useProductVariants,
+} from "../hooks/useCatalogQueries"
 import { getErrorMessage } from "../api/client"
 import { useCart } from "../context/CartContext"
 
 export default function ProductDetail() {
   const { categorySlug, productSlug } = useParams()
   const navigate = useNavigate()
-  const [product, setProduct] = useState(null)
-  const [category, setCategory] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
   const [activeTab, setActiveTab] = useState("description")
   const [adding, setAdding] = useState(false)
-  const [variantsData, setVariantsData] = useState(null)
   const [pickedColor, setPickedColor] = useState("")
   const [pickedSize, setPickedSize] = useState("")
+  const [actionError, setActionError] = useState("")
   const { addToCart } = useCart()
 
-  useEffect(() => {
-    let cancelled = false
+  const productQuery = useProduct(categorySlug, productSlug)
+  const categoryQuery = useCategory(categorySlug)
 
-    async function fetchData() {
-      try {
-        const [prodData, catData] = await Promise.all([
-          getProduct(categorySlug, productSlug),
-          getCategory(categorySlug),
-        ])
-        if (!cancelled) {
-          setProduct(prodData)
-          setCategory(catData)
-        }
-      } catch (err) {
-        if (!cancelled) setError(getErrorMessage(err))
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
+  const product = productQuery.data ?? null
+  const category = categoryQuery.data ?? null
+  const loading = productQuery.isPending
+  const error = actionError ||
+    (productQuery.isError ? getErrorMessage(productQuery.error) : "")
 
-    fetchData()
-    return () => { cancelled = true }
-  }, [categorySlug, productSlug])
-
-  useEffect(() => {
-    if (!product?.id) return
-    let cancelled = false
-
-    getProductVariants(product.id)
-      .then((data) => {
-        if (!cancelled) {
-          setVariantsData({
-            productId: product.id,
-            list: (data || []).filter((v) => v.is_active),
-          })
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setVariantsData({ productId: product.id, list: [] })
-      })
-
-    return () => { cancelled = true }
-  }, [product?.id])
-
-  const variantsLoading = Boolean(product) && variantsData?.productId !== product.id
-  const variants =
-    product && variantsData?.productId === product.id ? variantsData.list : []
+  const variantsQuery = useProductVariants(product?.id)
+  const variants = (variantsQuery.data ?? []).filter((v) => v.is_active)
+  const variantsLoading = Boolean(product) && variantsQuery.isPending
 
   const colors = [...new Set(variants.map((v) => v.color))]
   const selectedColor = colors.includes(pickedColor)
@@ -96,7 +59,7 @@ export default function ProductDetail() {
   async function handleAddToCart() {
     if (!product || adding) return
     if (hasVariants && !selectedVariant) {
-      setError("Please select a size and color")
+      setActionError("Please select a size and color")
       return
     }
     setAdding(true)
@@ -104,7 +67,7 @@ export default function ProductDetail() {
       await addToCart(product.id, 1, selectedVariant ? selectedVariant.id : null)
       navigate("/cart")
     } catch (err) {
-      setError(getErrorMessage(err))
+      setActionError(getErrorMessage(err))
     } finally {
       setAdding(false)
     }

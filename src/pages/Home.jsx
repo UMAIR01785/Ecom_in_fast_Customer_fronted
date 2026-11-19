@@ -1,49 +1,21 @@
 import shoesImage from "../images/shoes.png";
-import { useEffect, useRef, useState } from "react"
+import { useRef, useState } from "react"
 import { Link } from "react-router-dom"
-import { getCategories } from "../api/categories"
-import { getProducts } from "../api/products"
+import { useCategories, useProducts } from "../hooks/useCatalogQueries"
 
 const PRODUCTS_PAGE_LIMIT = 12
 
 export default function Home() {
-  const [categories, setCategories] = useState([])
-  const [products, setProducts] = useState([])
   const [page, setPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(0)
-  const [loading, setLoading] = useState(true)
   const productsRef = useRef(null)
 
-  useEffect(() => {
-    let cancelled = false
-    getCategories()
-      .then((cats) => {
-        if (!cancelled) setCategories(cats)
-      })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [])
+  const categoriesQuery = useCategories()
+  const productsQuery = useProducts({ page, limit: PRODUCTS_PAGE_LIMIT })
 
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    getProducts({ page, limit: PRODUCTS_PAGE_LIMIT })
-      .then((data) => {
-        if (!cancelled) {
-          setProducts(data.items || [])
-          setTotalPages(data.total_pages || 0)
-          setLoading(false)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setProducts([])
-          setTotalPages(0)
-          setLoading(false)
-        }
-      })
-    return () => { cancelled = true }
-  }, [page])
+  const categories = categoriesQuery.data ?? []
+  const products = productsQuery.data?.items ?? []
+  const totalPages = productsQuery.data?.total_pages ?? 0
+  const loading = productsQuery.isPending
 
   function handlePageChange(newPage) {
     if (newPage < 1 || newPage > totalPages || newPage === page) return

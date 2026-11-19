@@ -1,5 +1,8 @@
 import { useEffect } from "react"
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom"
+import { QueryClientProvider } from "@tanstack/react-query"
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools"
+import { queryClient } from "./lib/queryClient"
 import { AuthProvider, useAuth } from "./context/AuthContext"
 import { CartProvider } from "./context/CartContext"
 import { OrderSocketProvider } from "./context/OrderSocketContext"
@@ -9,6 +12,7 @@ import ShoppingChatWidget from "./components/ShoppingChatWidget"
 import Home from "./pages/Home"
 import Register from "./pages/Register"
 import Login from "./pages/Login"
+import ScrollToTop from "./components/ScrollToTop"
 import Profile from "./pages/Profile"
 import Categories from "./pages/Categories"
 import CategoryDetail from "./pages/CategoryDetail"
@@ -40,6 +44,7 @@ function AdminRedirect() {
 function WebLayout() {
   return (
     <>
+     <ScrollToTop />
       <Navbar />
       <Routes>
         <Route path="/" element={<Home />} />
@@ -101,21 +106,26 @@ function WebLayout() {
 
 function App() {
   return (
-    <AuthProvider>
-      <OrderSocketProvider>
-        <CartProvider>
-          <BrowserRouter>
-            <Routes>
-              {/* Old admin URLs jump to the standalone admin app */}
-              <Route path="/admin/*" element={<AdminRedirect />} />
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <OrderSocketProvider>
+          <CartProvider>
+            <BrowserRouter>
+              <Routes>
+                {/* Old admin URLs jump to the standalone admin app */}
+                <Route path="/admin/*" element={<AdminRedirect />} />
 
-              {/* Storefront */}
-              <Route path="*" element={<WebLayout />} />
-            </Routes>
-          </BrowserRouter>
-        </CartProvider>
-      </OrderSocketProvider>
-    </AuthProvider>
+                {/* Storefront */}
+                <Route path="*" element={<WebLayout />} />
+              </Routes>
+            </BrowserRouter>
+          </CartProvider>
+        </OrderSocketProvider>
+      </AuthProvider>
+      {import.meta.env.DEV && (
+        <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-right" />
+      )}
+    </QueryClientProvider>
   )
 }
 

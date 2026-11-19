@@ -1,30 +1,12 @@
-import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
-import { getCategories } from "../api/categories"
+import { useCategories } from "../hooks/useCatalogQueries"
 import { getErrorMessage } from "../api/client"
 
 export default function Categories() {
-  const [categories, setCategories] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
-
-  useEffect(() => {
-    let cancelled = false
-
-    async function fetchCategories() {
-      try {
-        const data = await getCategories()
-        if (!cancelled) setCategories(data)
-      } catch (err) {
-        if (!cancelled) setError(getErrorMessage(err))
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    fetchCategories()
-    return () => { cancelled = true }
-  }, [])
+  const categoriesQuery = useCategories()
+  const categories = categoriesQuery.data ?? []
+  const loading = categoriesQuery.isPending
+  const error = categoriesQuery.isError ? getErrorMessage(categoriesQuery.error) : ""
 
   if (loading) {
     return (
@@ -62,7 +44,7 @@ export default function Categories() {
         <div className="categories-error">
           <div className="categories-error-icon">&#9888;</div>
           <p>{error}</p>
-          <button className="btn btn-primary btn-sm" onClick={() => window.location.reload()}>
+          <button className="btn btn-primary btn-sm" onClick={() => categoriesQuery.refetch()}>
             Try Again
           </button>
         </div>

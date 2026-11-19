@@ -1,39 +1,21 @@
-import { useEffect, useState } from "react"
 import { useParams, Link } from "react-router-dom"
-import { getCategory } from "../api/categories"
-import { getProductsByCategory } from "../api/products"
+import { useCategory, useProductsByCategory } from "../hooks/useCatalogQueries"
 import { getErrorMessage } from "../api/client"
 
 export default function CategoryDetail() {
   const { slug } = useParams()
-  const [category, setCategory] = useState(null)
-  const [products, setProducts] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
 
-  useEffect(() => {
-    let cancelled = false
+  const categoryQuery = useCategory(slug)
+  const productsQuery = useProductsByCategory(slug)
 
-    async function fetchData() {
-      try {
-        const [catData, prodData] = await Promise.all([
-          getCategory(slug),
-          getProductsByCategory(slug),
-        ])
-        if (!cancelled) {
-          setCategory(catData)
-          setProducts(prodData)
-        }
-      } catch (err) {
-        if (!cancelled) setError(getErrorMessage(err))
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    fetchData()
-    return () => { cancelled = true }
-  }, [slug])
+  const category = categoryQuery.data ?? null
+  const products = productsQuery.data ?? []
+  const loading = categoryQuery.isPending || productsQuery.isPending
+  const error = categoryQuery.isError
+    ? getErrorMessage(categoryQuery.error)
+    : productsQuery.isError
+      ? getErrorMessage(productsQuery.error)
+      : ""
 
   if (loading) {
     return (

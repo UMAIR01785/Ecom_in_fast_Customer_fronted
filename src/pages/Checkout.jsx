@@ -2,13 +2,14 @@ import { useEffect, useRef, useState } from "react"
 import { Link, Navigate, useNavigate } from "react-router-dom"
 import { useCart } from "../context/CartContext"
 import { useAuth } from "../context/AuthContext"
-import { checkout } from "../api/orders"
+import { useCheckoutMutation } from "../hooks/useOrderQueries"
 import { getErrorMessage } from "../api/client"
 
 export default function Checkout() {
   const { cart, clearCart } = useCart()
   const { isAuthenticated, user } = useAuth()
   const navigate = useNavigate()
+  const checkoutMutation = useCheckoutMutation()
   const [address, setAddress] = useState(() => ({
     full_name: user ? `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim() : "",
     phone_number: user?.phone_number ?? "",

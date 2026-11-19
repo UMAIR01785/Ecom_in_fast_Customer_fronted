@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   getCart,
   addToCart as apiAddToCart,
@@ -7,69 +8,157 @@ import {
   clearCart as apiClearCart,
   mergeCart as apiMergeCart,
 } from "../api/cart"
+import { queryKeys } from "../api/queryKeys"
+import { getErrorMessage } from "../api/client"
 import { useAuth } from "./AuthContext"
 
 const CartContext = createContext(null)
 
+async function fetchCart(queryClient) {
+  try {
+    return await getCart()
+  } catch (err) {
+    // 404 means no cart exists yet (guest with no cookie, or empty cart).
+    // Keep any cart we already know about instead of clobbering it.
+    if (err?.response?.status === 404) {
+      const prev = queryClient.getQueryData(queryKeys.cart.all)
+      return prev !== undefined ? prev : null
+    }
+    throw err
+  }
+}
+
+function recomputeTotals(cart) {
+  if (!cart?.items) return cart
+  const items = cart.items.map((item) => {
+    const unit = Number(item.variant?.price ?? item.product?.price ?? 0)
+    return { ...item, item_total: unit * item.quantity }
+  })
+  const subtotal = items.reduce((sum, item) => sum + item.item_total, 0)
+  return { ...cart, items, subtotal }
+}
+
 export function CartProvider({ children }) {
-  const [cart, setCart] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
+  const queryClient = useQueryClient()
   const { isAuthenticated, token } = useAuth()
+  const [error, setError] = useState("")
   const prevAuthRef = useRef(isAuthenticated)
-  const initializedRef = useRef(false)
-  const cartRequestRef = useRef(0)
   const mergedTokenRef = useRef(null)
 
-  // Fetch cart from backend — only clear state on real errors, not 404
+  const cartQuery = useQuery({
+    queryKey: queryKeys.cart.all,
+    queryFn: () => fetchCart(queryClient),
+    staleTime: 10_000,
+    gcTime: 10 * 60_000,
+    refetchOnWindowFocus: false,
+  })
+
+  const cart = cartQuery.data ?? null
+  const loading = cartQuery.isLoading
+  const { refetch } = cartQuery
+
   const fetchCart = useCallback(async () => {
-    const requestId = ++cartRequestRef.current
+    const result = await refetch()
+    return result.data
+  }, [refetch])
 
-    try {
-      setLoading(true)
+  const addToCartMutation = useMutation({
+    mutationFn: ({ product_id, quantity = 1, variant_id = null }) =>
+      apiAddToCart(product_id, quantity, variant_id),
+    onMutate: () => setError(""),
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.cart.all, data)
+    },
+    onError: (err) => {
+      setError(getErrorMessage(err))
+    },
+  })
+
+  const updateCartItemMutation = useMutation({
+    mutationFn: ({ cart_item_id, quantity }) =>
+      apiUpdateCartItem(cart_item_id, quantity),
+    onMutate: async ({ cart_item_id, quantity }) => {
       setError("")
-      const data = await getCart()
-      if (requestId === cartRequestRef.current) {
-        setCart(data)
+      await queryClient.cancelQueries({ queryKey: queryKeys.cart.all })
+      const prev = queryClient.getQueryData(queryKeys.cart.all)
+      queryClient.setQueryData(queryKeys.cart.all, (old) => {
+        if (!old?.items) return old
+        const next = {
+          ...old,
+          items: old.items.map((item) =>
+            item.id === cart_item_id ? { ...item, quantity } : item
+          ),
+        }
+        return recomputeTotals(next)
+      })
+      return { prev }
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.cart.all, data)
+    },
+    onError: (err, _vars, context) => {
+      if (context?.prev !== undefined) {
+        queryClient.setQueryData(queryKeys.cart.all, context.prev)
       }
-    } catch (err) {
-      // 404 means no cart exists yet (guest with no cookie, or empty cart)
-      // Do NOT clear cart state — it may have been set locally by addToCart
-      if (requestId === cartRequestRef.current && err?.response?.status !== 404) {
-        setError(err?.response?.data?.detail || "Failed to load cart")
-      }
-      // Only set cart to null if it was never set (first load)
-      // Otherwise keep the local state intact
-      if (requestId === cartRequestRef.current) {
-        setCart((prev) => {
-          if (prev === null && !initializedRef.current) {
-            return null
-          }
-          return prev
-        })
-      }
-    } finally {
-      if (requestId === cartRequestRef.current) {
-        setLoading(false)
-        initializedRef.current = true
-      }
-    }
-  }, [])
+      setError(getErrorMessage(err))
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.cart.all })
+    },
+  })
 
-  // Fetch cart on mount only
-  useEffect(() => {
-    fetchCart()
-  }, [fetchCart])
+  const removeFromCartMutation = useMutation({
+    mutationFn: (cart_item_id) => apiRemoveFromCart(cart_item_id),
+    onMutate: async (cart_item_id) => {
+      setError("")
+      await queryClient.cancelQueries({ queryKey: queryKeys.cart.all })
+      const prev = queryClient.getQueryData(queryKeys.cart.all)
+      queryClient.setQueryData(queryKeys.cart.all, (old) => {
+        if (!old?.items) return old
+        const next = {
+          ...old,
+          items: old.items.filter((item) => item.id !== cart_item_id),
+        }
+        return recomputeTotals(next)
+      })
+      return { prev }
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.cart.all, data)
+    },
+    onError: (err, _vars, context) => {
+      if (context?.prev !== undefined) {
+        queryClient.setQueryData(queryKeys.cart.all, context.prev)
+      }
+      setError(getErrorMessage(err))
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.cart.all })
+    },
+  })
+
+  const clearCartMutation = useMutation({
+    mutationFn: () => apiClearCart(),
+    onMutate: () => setError(""),
+    onSuccess: () => {
+      queryClient.setQueryData(queryKeys.cart.all, null)
+    },
+    onError: (err) => {
+      setError(getErrorMessage(err))
+    },
+  })
 
   // Clear cart when user logs out
   useEffect(() => {
     if (prevAuthRef.current && !isAuthenticated) {
       apiClearCart()
-        .then(() => setCart(null))
-        .catch(() => setCart(null))
+        .catch(() => {})
+        .finally(() => {
+          queryClient.setQueryData(queryKeys.cart.all, null)
+        })
     }
     prevAuthRef.current = isAuthenticated
-  }, [isAuthenticated])
+  }, [isAuthenticated, queryClient])
 
   // Merge guest cart when user logs in
   useEffect(() => {
@@ -77,101 +166,49 @@ export function CartProvider({ children }) {
       if (mergedTokenRef.current === token) return
       mergedTokenRef.current = token
 
-      const requestId = ++cartRequestRef.current
-
       apiMergeCart()
         .then((data) => {
-          if (requestId === cartRequestRef.current) {
-            setCart(data)
-          }
+          queryClient.setQueryData(queryKeys.cart.all, data)
         })
         .catch(() => {})
     } else {
       mergedTokenRef.current = null
     }
-  }, [isAuthenticated, token])
+  }, [isAuthenticated, token, queryClient])
 
-  const addToCart = useCallback(async (product_id, quantity = 1, variant_id = null) => {
-    const requestId = ++cartRequestRef.current
+  const { mutateAsync: addToCartAsync } = addToCartMutation
+  const { mutateAsync: updateCartItemAsync } = updateCartItemMutation
+  const { mutateAsync: removeFromCartAsync } = removeFromCartMutation
+  const { mutateAsync: clearCartAsync } = clearCartMutation
 
-    try {
-      setError("")
-      const data = await apiAddToCart(product_id, quantity, variant_id)
-      if (requestId === cartRequestRef.current) {
-        setCart(data)
-      }
-      return data
-    } catch (err) {
-      const msg = err?.response?.data?.detail || "Failed to add to cart"
-      if (requestId === cartRequestRef.current) {
-        setError(msg)
-      }
-      throw new Error(msg)
-    }
-  }, [])
+  const addToCart = useCallback(
+    (product_id, quantity = 1, variant_id = null) =>
+      addToCartAsync({ product_id, quantity, variant_id }),
+    [addToCartAsync]
+  )
 
-  const updateCartItem = useCallback(async (cart_item_id, quantity) => {
-    const requestId = ++cartRequestRef.current
+  const updateCartItem = useCallback(
+    (cart_item_id, quantity) =>
+      updateCartItemAsync({ cart_item_id, quantity }),
+    [updateCartItemAsync]
+  )
 
-    try {
-      setError("")
-      const data = await apiUpdateCartItem(cart_item_id, quantity)
-      if (requestId === cartRequestRef.current) {
-        setCart(data)
-      }
-      return data
-    } catch (err) {
-      const msg = err?.response?.data?.detail || "Failed to update cart"
-      if (requestId === cartRequestRef.current) {
-        setError(msg)
-      }
-      throw new Error(msg)
-    }
-  }, [])
+  const removeFromCart = useCallback(
+    (cart_item_id) => removeFromCartAsync(cart_item_id),
+    [removeFromCartAsync]
+  )
 
-  const removeFromCart = useCallback(async (cart_item_id) => {
-    const requestId = ++cartRequestRef.current
+  const clearCart = useCallback(() => clearCartAsync(), [clearCartAsync])
 
-    try {
-      setError("")
-      const data = await apiRemoveFromCart(cart_item_id)
-      if (requestId === cartRequestRef.current) {
-        setCart(data)
-      }
-      return data
-    } catch (err) {
-      const msg = err?.response?.data?.detail || "Failed to remove from cart"
-      if (requestId === cartRequestRef.current) {
-        setError(msg)
-      }
-      throw new Error(msg)
-    }
-  }, [])
+  const itemCount =
+    cart?.items?.reduce((sum, item) => sum + item.quantity, 0) || 0
 
-  const clearCart = useCallback(async () => {
-    const requestId = ++cartRequestRef.current
-
-    try {
-      setError("")
-      await apiClearCart()
-      if (requestId === cartRequestRef.current) {
-        setCart(null)
-      }
-    } catch (err) {
-      const msg = err?.response?.data?.detail || "Failed to clear cart"
-      if (requestId === cartRequestRef.current) {
-        setError(msg)
-      }
-      throw new Error(msg)
-    }
-  }, [])
-
-  const itemCount = cart?.items?.reduce((sum, item) => sum + item.quantity, 0) || 0
+  const queryError = cartQuery.isError ? getErrorMessage(cartQuery.error) : ""
 
   const value = {
     cart,
     loading,
-    error,
+    error: error || queryError,
     itemCount,
     fetchCart,
     addToCart,
