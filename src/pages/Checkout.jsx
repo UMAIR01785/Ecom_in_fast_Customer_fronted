@@ -22,7 +22,6 @@ export default function Checkout() {
     landmark: "",
   }))
   const [paymentMethod, setPaymentMethod] = useState("cod")
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const prefilledRef = useRef(false)
 
@@ -110,9 +109,11 @@ export default function Checkout() {
       return
     }
 
-    setLoading(true)
     try {
-      const data = await checkout(orderAddress, paymentMethod)
+      const data = await checkoutMutation.mutateAsync({
+        orderAddress,
+        paymentMethod,
+      })
 
       // Card payment → Stripe redirects to the payment session page
       if (data.payment_url) {
@@ -130,8 +131,6 @@ export default function Checkout() {
       clearCart().catch(() => {})
     } catch (err) {
       setError(getErrorMessage(err))
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -328,9 +327,9 @@ export default function Checkout() {
               <button
                 type="submit"
                 className="btn btn-primary btn-lg btn-block"
-                disabled={loading}
+                disabled={checkoutMutation.isPending}
               >
-                {loading
+                {checkoutMutation.isPending
                   ? paymentMethod === "card"
                     ? "Redirecting to Payment..."
                     : "Placing Order..."

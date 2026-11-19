@@ -44,7 +44,7 @@ function AdminRedirect() {
 function WebLayout() {
   return (
     <>
-     <ScrollToTop />
+     
       <Navbar />
       <Routes>
         <Route path="/" element={<Home />} />
@@ -111,6 +111,7 @@ function App() {
         <OrderSocketProvider>
           <CartProvider>
             <BrowserRouter>
+              <ScrollToTop />
               <Routes>
                 {/* Old admin URLs jump to the standalone admin app */}
                 <Route path="/admin/*" element={<AdminRedirect />} />

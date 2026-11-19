@@ -14,7 +14,7 @@ import { useAuth } from "./AuthContext"
 
 const CartContext = createContext(null)
 
-async function fetchCart(queryClient) {
+async function fetchCartFromServer(queryClient) {
   try {
     return await getCart()
   } catch (err) {
@@ -47,9 +47,12 @@ export function CartProvider({ children }) {
 
   const cartQuery = useQuery({
     queryKey: queryKeys.cart.all,
-    queryFn: () => fetchCart(queryClient),
-    staleTime: 10_000,
-    gcTime: 10 * 60_000,
+    queryFn: () => fetchCartFromServer(queryClient),
+    // Cart is user-specific and changes on every mutation: never serve it
+    // from cache on mount/reconnect (staleTime 0) and drop it quickly when
+    // inactive. Focus refetch stays off to avoid requests while typing.
+    staleTime: 0,
+    gcTime: 5 * 60_000,
     refetchOnWindowFocus: false,
   })
 

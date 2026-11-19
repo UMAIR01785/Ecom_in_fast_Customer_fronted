@@ -29,7 +29,9 @@ export const queryKeys = {
   orders: {
     all: ["orders"],
     lists: () => ["orders", "list"],
-    detail: (id) => ["orders", "detail", id],
+    // Normalized: route params are strings, API ids are numbers —
+    // both must resolve to the same cache entry.
+    detail: (id) => ["orders", "detail", String(id)],
   },
   refunds: {
     all: ["refunds"],

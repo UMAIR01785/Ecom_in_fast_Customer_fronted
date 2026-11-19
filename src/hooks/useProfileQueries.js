@@ -15,7 +15,8 @@ export function useProfile() {
     queryKey: queryKeys.profile.all,
     queryFn: fetchProfile,
     enabled: isAuthenticated,
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
   })
 }
 

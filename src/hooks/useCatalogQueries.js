@@ -4,12 +4,17 @@ import { getCategories, getCategory } from "../api/categories"
 import { getProductVariants } from "../api/productVariants"
 import { queryKeys } from "../api/queryKeys"
 
+// Cache policies (staleTime / gcTime):
+// products, product details, variants -> 5 min / 30 min
+// categories                          -> 10 min / 30 min
+
 export function useProducts({ page = 1, limit = 12 } = {}) {
   return useQuery({
     queryKey: queryKeys.products.list({ page, limit }),
     queryFn: () => getProducts({ page, limit }),
     placeholderData: keepPreviousData,
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
   })
 }
 
@@ -18,7 +23,8 @@ export function useProductsByCategory(categorySlug, { enabled = true } = {}) {
     queryKey: queryKeys.products.byCategory(categorySlug),
     queryFn: () => getProductsByCategory(categorySlug),
     enabled: enabled && Boolean(categorySlug),
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
   })
 }
 
@@ -27,7 +33,8 @@ export function useProduct(categorySlug, productSlug) {
     queryKey: queryKeys.products.detail(categorySlug, productSlug),
     queryFn: () => getProduct(categorySlug, productSlug),
     enabled: Boolean(categorySlug && productSlug),
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
   })
 }
 
@@ -35,8 +42,8 @@ export function useCategories() {
   return useQuery({
     queryKey: queryKeys.categories.lists(),
     queryFn: getCategories,
-    staleTime: 5 * 60_000,
-    refetchOnWindowFocus: false,
+    staleTime: 10 * 60_000,
+    gcTime: 30 * 60_000,
   })
 }
 
@@ -45,7 +52,8 @@ export function useCategory(slug) {
     queryKey: queryKeys.categories.detail(slug),
     queryFn: () => getCategory(slug),
     enabled: Boolean(slug),
-    staleTime: 5 * 60_000,
+    staleTime: 10 * 60_000,
+    gcTime: 30 * 60_000,
   })
 }
 
@@ -54,6 +62,7 @@ export function useProductVariants(productId) {
     queryKey: queryKeys.variants.byProduct(productId),
     queryFn: () => getProductVariants(productId),
     enabled: Boolean(productId),
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
   })
 }

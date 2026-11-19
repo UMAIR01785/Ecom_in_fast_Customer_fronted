@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react"
 import { Link, Navigate, useNavigate } from "react-router-dom"
 import { useAuth } from "../context/AuthContext"
-import { getMyRefunds } from "../api/refunds"
+import { useMyRefunds } from "../hooks/useOrderQueries"
 import { getErrorMessage } from "../api/client"
 
 const STATUS_COLORS = {
@@ -36,25 +35,11 @@ function formatDate(value) {
 export default function Refunds() {
   const { isAuthenticated } = useAuth()
   const navigate = useNavigate()
-  const [refunds, setRefunds] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
 
-  useEffect(() => {
-    let cancelled = false
-    async function fetchRefunds() {
-      try {
-        const data = await getMyRefunds()
-        if (!cancelled) setRefunds(data)
-      } catch (err) {
-        if (!cancelled) setError(getErrorMessage(err))
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    fetchRefunds()
-    return () => { cancelled = true }
-  }, [])
+  const refundsQuery = useMyRefunds({ enabled: isAuthenticated })
+  const refunds = refundsQuery.data ?? []
+  const loading = refundsQuery.isPending
+  const error = refundsQuery.isError ? getErrorMessage(refundsQuery.error) : ""
 
   if (!isAuthenticated) {
     return <Navigate to="/login?returnTo=/refunds" replace />

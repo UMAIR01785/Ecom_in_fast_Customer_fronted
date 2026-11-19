@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react"
 import { Link, useLocation } from "react-router-dom"
+import { useQueryClient } from "@tanstack/react-query"
 import {
   sendShoppingChatMessage,
   checkoutShoppingChat,
 } from "../api/shoppingChat"
 import { getCart } from "../api/cart"
+import { queryKeys } from "../api/queryKeys"
 import { getErrorMessage } from "../api/client"
 import { useCart } from "../context/CartContext"
 import { useAuth } from "../context/AuthContext"
@@ -290,6 +292,7 @@ function ChatCheckout({ onBack, onOrderPlaced }) {
   const { cart, fetchCart } = useCart()
   const { isAuthenticated, user } = useAuth()
   const location = useLocation()
+  const queryClient = useQueryClient()
 
   const [step, setStep] = useState("details") // details | review | success
   const [address, setAddress] = useState(() => ({ ...EMPTY_ADDRESS }))
@@ -387,6 +390,8 @@ function ChatCheckout({ onBack, onOrderPlaced }) {
       setSuccessOrder(data?.order || null)
       setStep("success")
       fetchCart().catch(() => {})
+      // The chat checkout created an order — refresh cached order lists
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.all })
       onOrderPlaced?.()
     } catch (err) {
       if (!err?.response) {

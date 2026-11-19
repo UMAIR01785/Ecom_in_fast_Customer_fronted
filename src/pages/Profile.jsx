@@ -1,61 +1,52 @@
 import { useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import api, { getErrorMessage } from "../api/client"
+import { getErrorMessage } from "../api/client"
 import { useAuth } from "../context/AuthContext"
+import {
+  useProfile,
+  useProfileErrorHandler,
+  useUpdateProfile,
+  useUploadProfileImage,
+  useDeleteProfileImage,
+} from "../hooks/useProfileQueries"
 import { convertToWebp } from "../utils/image"
 
 export default function Profile() {
-  const [profile, setProfile] = useState(null)
-  const [error, setError] = useState("")
-  const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
-  const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [editForm, setEditForm] = useState({})
+  const [error, setError] = useState("")
   const fileInputRef = useRef(null)
-  const { token, logout } = useAuth()
+  const { logout } = useAuth()
   const navigate = useNavigate()
 
+  const profileQuery = useProfile()
+  useProfileErrorHandler(profileQuery, { logout, navigate })
+
+  const updateMutation = useUpdateProfile()
+  const uploadMutation = useUploadProfileImage()
+  const deleteImageMutation = useDeleteProfileImage()
+
+  const profile = profileQuery.data ?? null
+  const loading = profileQuery.isPending
+  const fetchError = profileQuery.isError
+    ? getErrorMessage(profileQuery.error)
+    : ""
+
+  // Seed the edit form whenever a fresh profile arrives while not editing
   useEffect(() => {
-    let cancelled = false
-
-    async function fetchProfile() {
-      try {
-        const res = await api.get("/profile")
-        if (!cancelled) {
-          setProfile(res.data)
-          setEditForm({
-            first_name: res.data.first_name || "",
-            last_name: res.data.last_name || "",
-            email: res.data.email || "",
-            username: res.data.username || "",
-            phone_number: res.data.phone_number || "",
-            bio: res.data.bio || "",
-            address: res.data.address || "",
-            city: res.data.city || "",
-          })
-        }
-      } catch (err) {
-        if (!cancelled) {
-          if (err?.response?.status === 401) {
-            logout()
-            navigate("/login")
-            return
-          }
-          setError(getErrorMessage(err))
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
-    }
-
-    fetchProfile()
-    return () => {
-      cancelled = true
-    }
-  }, [token, logout, navigate])
+    if (!profile || editing) return
+    setEditForm({
+      first_name: profile.first_name || "",
+      last_name: profile.last_name || "",
+      email: profile.email || "",
+      username: profile.username || "",
+      phone_number: profile.phone_number || "",
+      bio: profile.bio || "",
+      address: profile.address || "",
+      city: profile.city || "",
+    })
+  }, [profile, editing])
 
   function handleEditChange(e) {
     setEditForm({ ...editForm, [e.target.name]: e.target.value })
@@ -64,16 +55,12 @@ export default function Profile() {
   async function handleSave(e) {
     e.preventDefault()
     setError("")
-    setSaving(true)
 
     try {
-      const res = await api.patch("/profile/update", editForm)
-      setProfile(res.data)
+      await updateMutation.mutateAsync(editForm)
       setEditing(false)
     } catch (err) {
       setError(getErrorMessage(err))
-    } finally {
-      setSaving(false)
     }
   }
 
@@ -105,14 +92,7 @@ export default function Profile() {
       const formData = new FormData()
       formData.append("file", webpFile)
 
-      const res = await api.post("/profile/image", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      })
-
-      setProfile((prev) => ({
-        ...prev,
-        profile_picture: res.data.profile_picture,
-      }))
+      await uploadMutation.mutateAsync(formData)
     } catch (err) {
       setError(getErrorMessage(err))
     } finally {
@@ -128,11 +108,7 @@ export default function Profile() {
     setUploading(true)
 
     try {
-      await api.delete("/profile/image")
-      setProfile((prev) => ({
-        ...prev,
-        profile_picture: null,
-      }))
+      await deleteImageMutation.mutateAsync()
     } catch (err) {
       setError(getErrorMessage(err))
     } finally {
@@ -148,11 +124,11 @@ export default function Profile() {
     )
   }
 
-  if (error && !profile) {
+  if ((fetchError || error) && !profile) {
     return (
       <main className="page">
         <div className="auth-card">
-          <div className="alert alert-error">{error}</div>
+          <div className="alert alert-error">{fetchError || error}</div>
         </div>
       </main>
     )
@@ -330,16 +306,16 @@ export default function Profile() {
                 type="button"
                 className="btn btn-outline btn-sm"
                 onClick={handleCancel}
-                disabled={saving}
+                disabled={updateMutation.isPending}
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 className="btn btn-primary btn-sm"
-                disabled={saving}
+                disabled={updateMutation.isPending}
               >
-                {saving ? "Saving..." : "Save Changes"}
+                {updateMutation.isPending ? "Saving..." : "Save Changes"}
               </button>
             </div>
           </form>

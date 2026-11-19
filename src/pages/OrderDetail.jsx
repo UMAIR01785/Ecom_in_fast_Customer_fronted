@@ -1,10 +1,16 @@
 import { useEffect, useState } from "react"
 import { Link, Navigate, useParams, useNavigate } from "react-router-dom"
+import { useQueryClient } from "@tanstack/react-query"
 import { useAuth } from "../context/AuthContext"
 import { useOrderSocket } from "../context/OrderSocketContext"
-import { getOrder, cancelOrder } from "../api/orders"
-import { getReceipt } from "../api/payments"
-import { requestRefund, getMyRefunds } from "../api/refunds"
+import {
+  useOrder,
+  useMyRefunds,
+  useReceipt,
+  useCancelOrder,
+  useRequestRefund,
+} from "../hooks/useOrderQueries"
+import { queryKeys } from "../api/queryKeys"
 import { getErrorMessage } from "../api/client"
 
 const STATUS_COLORS = {
@@ -55,32 +61,48 @@ export default function OrderDetail() {
   const { isAuthenticated } = useAuth()
   const { subscribe } = useOrderSocket()
   const navigate = useNavigate()
-  const [order, setOrder] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
-  const [cancelling, setCancelling] = useState(false)
-  const [receipt, setReceipt] = useState(null)
-  const [receiptLoading, setReceiptLoading] = useState(false)
-  const [receiptError, setReceiptError] = useState("")
-  const [refund, setRefund] = useState(null)
+  const queryClient = useQueryClient()
+  const [receiptOpen, setReceiptOpen] = useState(false)
   const [refundOpen, setRefundOpen] = useState(false)
   const [refundReason, setRefundReason] = useState("")
-  const [refundSubmitting, setRefundSubmitting] = useState(false)
   const [refundError, setRefundError] = useState("")
+  const [actionError, setActionError] = useState("")
 
-  async function handleViewReceipt() {
+  const orderQuery = useOrder(id, { enabled: isAuthenticated })
+  const refundsQuery = useMyRefunds({ enabled: isAuthenticated })
+  const order = orderQuery.data ?? null
+  const loading = orderQuery.isPending
+  const error =
+    actionError ||
+    (orderQuery.isError ? getErrorMessage(orderQuery.error) : "")
+
+  const allRefunds = refundsQuery.data ?? []
+  const refund =
+    allRefunds.find((r) => String(r.order_id) === String(id)) || null
+
+  const receiptQuery = useReceipt(order?.payment?.id, { enabled: receiptOpen })
+  const receipt = receiptQuery.data ?? null
+  const receiptLoading = receiptOpen && receiptQuery.isFetching && !receipt
+  const receiptError =
+    receiptOpen && receiptQuery.isError
+      ? getErrorMessage(receiptQuery.error)
+      : ""
+
+  const cancelMutation = useCancelOrder()
+  const refundMutation = useRequestRefund()
+  const cancelling = cancelMutation.isPending
+  const refundSubmitting = refundMutation.isPending
+
+  function handleViewReceipt() {
     if (!order?.payment?.id) return
-    setReceiptLoading(true)
-    setReceiptError("")
-    setReceipt(null)
-    try {
-      const data = await getReceipt(order.payment.id)
-      setReceipt(data)
-    } catch (err) {
-      setReceiptError(getErrorMessage(err))
-    } finally {
-      setReceiptLoading(false)
+    setReceiptOpen(true)
+    if (receiptQuery.isError) {
+      receiptQuery.refetch()
     }
+  }
+
+  function closeReceipt() {
+    setReceiptOpen(false)
   }
 
   useEffect(() => {
@@ -90,52 +112,46 @@ export default function OrderDetail() {
       const { order_id: orderId, status } = message.data || {}
       if (String(orderId) !== String(id)) return
 
-      if (status === "cancelled") {
-        navigate("/orders")
-        return
-      }
-
-      setOrder((prev) => (prev ? { ...prev, status } : prev))
+      queryClient.setQueryData(queryKeys.orders.detail(id), (prev) =>
+        prev ? { ...prev, status } : prev
+      )
     })
-  }, [subscribe, id, navigate])
+  }, [subscribe, id, queryClient])
 
+  // Redirect away when the order is (or becomes) cancelled
   useEffect(() => {
-    let cancelled = false
-    async function fetchOrder() {
-      try {
-        const data = await getOrder(id)
-        if (!cancelled) {
-          if (data.status === "cancelled") {
-            navigate("/orders")
-          } else {
-            setOrder(data)
-          }
-        }
-      } catch (err) {
-        if (!cancelled) setError(getErrorMessage(err))
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
+    if (order?.status === "cancelled") {
+      navigate("/orders")
     }
-    fetchOrder()
-    return () => { cancelled = true }
-  }, [id, navigate])
+  }, [order?.status, navigate])
 
-  useEffect(() => {
-    let cancelled = false
-    async function fetchRefund() {
-      try {
-        const data = await getMyRefunds()
-        if (cancelled) return
-        const match = data.find((r) => String(r.order_id) === String(id))
-        setRefund(match || null)
-      } catch {
-        if (!cancelled) setRefund(null)
-      }
+  async function handleCancel() {
+    if (!window.confirm("Are you sure you want to cancel this order?")) return
+    setActionError("")
+    try {
+      await cancelMutation.mutateAsync(order.id)
+      navigate("/orders")
+    } catch (err) {
+      setActionError(getErrorMessage(err))
     }
-    fetchRefund()
-    return () => { cancelled = true }
-  }, [id])
+  }
+
+  async function handleRefundSubmit(e) {
+    e.preventDefault()
+    const reason = refundReason.trim()
+    if (reason.length < 5) {
+      setRefundError("Please give a reason of at least 5 characters")
+      return
+    }
+    setRefundError("")
+    try {
+      await refundMutation.mutateAsync({ orderId: order.id, reason })
+      setRefundOpen(false)
+      setRefundReason("")
+    } catch (err) {
+      setRefundError(getErrorMessage(err))
+    }
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login?returnTo=/orders" replace />
@@ -168,40 +184,6 @@ export default function OrderDetail() {
   }
 
   if (!order) return null
-
-  async function handleCancel() {
-    if (!window.confirm("Are you sure you want to cancel this order?")) return
-    setCancelling(true)
-    try {
-      await cancelOrder(order.id)
-      navigate("/orders")
-    } catch (err) {
-      setError(getErrorMessage(err))
-    } finally {
-      setCancelling(false)
-    }
-  }
-
-  async function handleRefundSubmit(e) {
-    e.preventDefault()
-    const reason = refundReason.trim()
-    if (reason.length < 5) {
-      setRefundError("Please give a reason of at least 5 characters")
-      return
-    }
-    setRefundSubmitting(true)
-    setRefundError("")
-    try {
-      const created = await requestRefund(order.id, reason)
-      setRefund(created)
-      setRefundOpen(false)
-      setRefundReason("")
-    } catch (err) {
-      setRefundError(getErrorMessage(err))
-    } finally {
-      setRefundSubmitting(false)
-    }
-  }
 
   const style = STATUS_COLORS[order.status] || STATUS_COLORS.pending
   const shipping = order.shipping_address
@@ -590,7 +572,7 @@ export default function OrderDetail() {
         </div>
       </div>
 
-      {(receipt || receiptLoading || receiptError) && (
+      {receiptOpen && (
         <div
           style={{
             position: "fixed",
@@ -602,7 +584,7 @@ export default function OrderDetail() {
             zIndex: 1000,
             padding: 20,
           }}
-          onClick={() => !receiptLoading && setReceipt(null)}
+          onClick={() => !receiptLoading && closeReceipt()}
         >
           <div
             className="profile-card"
@@ -616,7 +598,7 @@ export default function OrderDetail() {
               <button
                 className="admin-action-btn"
                 title="Close"
-                onClick={() => setReceipt(null)}
+                onClick={closeReceipt}
                 disabled={receiptLoading}
               >
                 &#10005;

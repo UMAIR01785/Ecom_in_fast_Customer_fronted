@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import { Link, Navigate, useNavigate } from "react-router-dom"
+import { useQueryClient } from "@tanstack/react-query"
 import { useAuth } from "../context/AuthContext"
 import { useOrderSocket } from "../context/OrderSocketContext"
-import { getOrders } from "../api/orders"
-import { getMyRefunds } from "../api/refunds"
+import { useOrders, useMyRefunds } from "../hooks/useOrderQueries"
+import { queryKeys } from "../api/queryKeys"
 import { getErrorMessage } from "../api/client"
 import { addressLine } from "../utils/orderAddress"
 
@@ -44,11 +45,17 @@ const REFUND_STATUS_LABELS = {
 export default function Orders() {
   const { isAuthenticated } = useAuth()
   const { subscribe } = useOrderSocket()
-  const [orders, setOrders] = useState([])
-  const [refunds, setRefunds] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
+  const queryClient = useQueryClient()
   const navigate = useNavigate()
+
+  const ordersQuery = useOrders({ enabled: isAuthenticated })
+  const refundsQuery = useMyRefunds({ enabled: isAuthenticated })
+
+  const allOrders = ordersQuery.data ?? []
+  const orders = allOrders.filter((o) => o.status !== "cancelled")
+  const refunds = refundsQuery.data ?? []
+  const loading = ordersQuery.isPending
+  const error = ordersQuery.isError ? getErrorMessage(ordersQuery.error) : ""
 
   const refundByOrder = new Map(
     refunds.map((r) => [String(r.order_id), r])
@@ -60,37 +67,14 @@ export default function Orders() {
 
       const { order_id: orderId, status } = message.data || {}
 
-      setOrders((prev) => {
-        if (status === "cancelled") {
-          return prev.filter((o) => o.id !== orderId)
-        }
+      queryClient.setQueryData(queryKeys.orders.lists(), (prev) => {
+        if (!Array.isArray(prev)) return prev
         return prev.map((o) =>
           o.id === orderId ? { ...o, status } : o
         )
       })
     })
-  }, [subscribe])
-
-  useEffect(() => {
-    let cancelled = false
-    async function fetchOrders() {
-      try {
-        const [ordersData, refundsData] = await Promise.all([
-          getOrders(),
-          getMyRefunds().catch(() => []),
-        ])
-        if (cancelled) return
-        setOrders(ordersData.filter((o) => o.status !== "cancelled"))
-        setRefunds(refundsData)
-      } catch (err) {
-        if (!cancelled) setError(getErrorMessage(err))
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    fetchOrders()
-    return () => { cancelled = true }
-  }, [])
+  }, [subscribe, queryClient])
 
   if (!isAuthenticated) {
     return <Navigate to="/login?returnTo=/orders" replace />

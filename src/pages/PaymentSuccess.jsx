@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react"
 import { Link, useSearchParams } from "react-router-dom"
+import { useQueryClient } from "@tanstack/react-query"
 import { useCart } from "../context/CartContext"
 import { getOrders } from "../api/orders"
+import { queryKeys } from "../api/queryKeys"
 
 export default function PaymentSuccess() {
   const { fetchCart } = useCart()
+  const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
   const sessionId = searchParams.get("session_id")
   const [orderId, setOrderId] = useState(null)
@@ -26,6 +29,8 @@ export default function PaymentSuccess() {
           if (orders.length > 0) {
             setOrderId(orders[0].id)
             setChecking(false)
+            // Keep the cached order list in sync with what we just polled
+            queryClient.setQueryData(queryKeys.orders.lists(), orders)
             fetchCart().catch(() => {})
             return
           }
@@ -41,7 +46,7 @@ export default function PaymentSuccess() {
     return () => {
       cancelled = true
     }
-  }, [fetchCart])
+  }, [fetchCart, queryClient])
 
   return (
     <main className="page pd-page">
