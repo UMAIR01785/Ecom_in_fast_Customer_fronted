@@ -9,6 +9,7 @@ import { OrderSocketProvider } from "./context/OrderSocketContext"
 import Navbar from "./components/Navbar"
 import Footer from "./components/Footer"
 import ShoppingChatWidget from "./components/ShoppingChatWidget"
+import TiltEffect from "./components/TiltEffect"
 import Home from "./pages/Home"
 import Register from "./pages/Register"
 import Login from "./pages/Login"
@@ -112,6 +113,7 @@ function App() {
           <CartProvider>
             <BrowserRouter>
               <ScrollToTop />
+              <TiltEffect />
               <Routes>
                 {/* Old admin URLs jump to the standalone admin app */}
                 <Route path="/admin/*" element={<AdminRedirect />} />

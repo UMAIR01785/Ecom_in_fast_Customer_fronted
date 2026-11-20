@@ -13,8 +13,13 @@ export default function Cart() {
   const [updating, setUpdating] = useState(null)
 
   useEffect(() => {
-    fetchCart().catch(() => {})
-  }, [fetchCart])
+    // Only pull from the server when the cache has nothing to render.
+    // After a successful add, the mutation already wrote the full cart —
+    // refetching here raced and could overwrite it with a stale empty GET.
+    if (!cart || cart.items.length === 0) {
+      fetchCart().catch(() => {})
+    }
+  }, [cart, fetchCart])
 
   async function changeQty(itemId, qty) {
     if (qty < 1) return

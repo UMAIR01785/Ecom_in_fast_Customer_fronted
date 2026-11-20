@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, Suspense, lazy } from "react"
 import { useParams, Link, useNavigate } from "react-router-dom"
 import {
   useProduct,
@@ -7,6 +7,8 @@ import {
 } from "../hooks/useCatalogQueries"
 import { getErrorMessage } from "../api/client"
 import { useCart } from "../context/CartContext"
+
+const ProductStage = lazy(() => import("../components/three/ProductStage"))
 
 export default function ProductDetail() {
   const { categorySlug, productSlug } = useParams()
@@ -118,15 +120,17 @@ export default function ProductDetail() {
 
       <div className="pd-layout">
         <div className="pd-image-section">
+          <Suspense fallback={null}>
+            <ProductStage image={product.image} name={product.name} />
+          </Suspense>
           {product.image ? (
-            <div className="pd-image-wrap">
-              <img src={product.image} alt={product.name} className="pd-image" />
+            <div className="pd-image-wrap pd-image-wrap--overlay">
               {!product.is_active && (
                 <span className="pd-badge pd-badge-inactive">Inactive</span>
               )}
             </div>
           ) : (
-            <div className="pd-placeholder">
+            <div className="pd-placeholder pd-placeholder--ghost">
               <span>{product.name.charAt(0).toUpperCase()}</span>
             </div>
           )}

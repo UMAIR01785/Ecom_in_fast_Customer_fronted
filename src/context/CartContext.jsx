@@ -57,7 +57,9 @@ export function CartProvider({ children }) {
   })
 
   const cart = cartQuery.data ?? null
-  const loading = cartQuery.isLoading
+  // Skeleton only when we have nothing to show yet — not while a
+  // background refetch runs over an already-populated cart.
+  const loading = cartQuery.isPending && !cart
   const { refetch } = cartQuery
 
   const fetchCart = useCallback(async () => {
@@ -68,9 +70,16 @@ export function CartProvider({ children }) {
   const addToCartMutation = useMutation({
     mutationFn: ({ product_id, quantity = 1, variant_id = null }) =>
       apiAddToCart(product_id, quantity, variant_id),
-    onMutate: () => setError(""),
+    onMutate: async () => {
+      setError("")
+      // Stop any in-flight GET /cart so a stale empty response
+      // cannot land after we write the post-add cart below.
+      await queryClient.cancelQueries({ queryKey: queryKeys.cart.all })
+    },
     onSuccess: (data) => {
-      queryClient.setQueryData(queryKeys.cart.all, data)
+      if (data) {
+        queryClient.setQueryData(queryKeys.cart.all, data)
+      }
     },
     onError: (err) => {
       setError(getErrorMessage(err))
@@ -97,7 +106,9 @@ export function CartProvider({ children }) {
       return { prev }
     },
     onSuccess: (data) => {
-      queryClient.setQueryData(queryKeys.cart.all, data)
+      if (data) {
+        queryClient.setQueryData(queryKeys.cart.all, data)
+      }
     },
     onError: (err, _vars, context) => {
       if (context?.prev !== undefined) {
@@ -106,7 +117,11 @@ export function CartProvider({ children }) {
       setError(getErrorMessage(err))
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.cart.all })
+      // Server response already landed in onSuccess; only refetch if the
+      // cache is empty (e.g. mutation failed before any write).
+      if (!queryClient.getQueryData(queryKeys.cart.all)) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.cart.all })
+      }
     },
   })
 
@@ -127,7 +142,9 @@ export function CartProvider({ children }) {
       return { prev }
     },
     onSuccess: (data) => {
-      queryClient.setQueryData(queryKeys.cart.all, data)
+      if (data) {
+        queryClient.setQueryData(queryKeys.cart.all, data)
+      }
     },
     onError: (err, _vars, context) => {
       if (context?.prev !== undefined) {
@@ -136,7 +153,9 @@ export function CartProvider({ children }) {
       setError(getErrorMessage(err))
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.cart.all })
+      if (!queryClient.getQueryData(queryKeys.cart.all)) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.cart.all })
+      }
     },
   })
 
